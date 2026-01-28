@@ -1,95 +1,220 @@
 import { motion } from "framer-motion";
 import { useCartStore } from "../stores/useCartStore";
+import { useUserStore } from "../stores/useUserStore"; // <--- 1. Import User Store
 import { Link } from "react-router-dom";
 import { MoveRight } from "lucide-react";
-import { loadStripe } from "@stripe/stripe-js";
 import axios from "../lib/axios";
-
-const stripePromise = loadStripe(
-	"pk_test_51KZYccCoOZF2UhtOwdXQl3vcizup20zqKqT9hVUIsVzsdBrhqbUI2fE0ZdEVLdZfeHjeyFXtqaNsyCJCmZWnjNZa00PzMAjlcL"
-);
+import { useState } from "react";
+import toast from "react-hot-toast";
 
 const OrderSummary = () => {
-	const { total, subtotal, coupon, isCouponApplied, cart } = useCartStore();
+  const { total, subtotal, coupon, isCouponApplied, cart } = useCartStore();
+  const { user } = useUserStore(); // <--- 2. Get User for Email
 
-	const savings = subtotal - total;
-	const formattedSubtotal = subtotal.toFixed(2);
-	const formattedTotal = total.toFixed(2);
-	const formattedSavings = savings.toFixed(2);
+  const [address, setAddress] = useState({
+    fullName: "",
+    address: "",
+    city: "",
+    postalCode: "",
+    country: "India",
+    phone: "",
+  });
 
-	const handlePayment = async () => {
-		const stripe = await stripePromise;
-		const res = await axios.post("/payments/create-checkout-session", {
-			products: cart,
-			couponCode: coupon ? coupon.code : null,
-		});
+  const handleInputChange = (e) => {
+    setAddress({ ...address, [e.target.name]: e.target.value });
+  };
 
-		const session = res.data;
-		const result = await stripe.redirectToCheckout({
-			sessionId: session.id,
-		});
+  const savings = subtotal - total;
+  const formattedSubtotal = subtotal.toFixed(2);
+  const formattedTotal = total.toFixed(2);
+  const formattedSavings = savings.toFixed(2);
 
-		if (result.error) {
-			console.error("Error:", result.error);
-		}
-	};
+  const handlePayment = async () => {
+    // Validate Address
+    if (
+      !address.fullName ||
+      !address.address ||
+      !address.city ||
+      !address.postalCode ||
+      !address.phone
+    ) {
+      toast.error("Please fill in all address details.");
+      return;
+    }
 
-	return (
-		<motion.div
-			className='space-y-4 rounded-lg border border-gray-700 bg-gray-800 p-4 shadow-sm sm:p-6'
-			initial={{ opacity: 0, y: 20 }}
-			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.5 }}
-		>
-			<p className='text-xl font-semibold text-emerald-400'>Order summary</p>
+    try {
+      const res = await axios.post("/payments/create-checkout-session", {
+        products: cart,
+        couponCode: coupon ? coupon.code : null,
+        shippingAddress: address,
+      });
 
-			<div className='space-y-4'>
-				<div className='space-y-2'>
-					<dl className='flex items-center justify-between gap-4'>
-						<dt className='text-base font-normal text-gray-300'>Original price</dt>
-						<dd className='text-base font-medium text-white'>${formattedSubtotal}</dd>
-					</dl>
+      const { id: order_id, amount, currency, keyId } = res.data;
 
-					{savings > 0 && (
-						<dl className='flex items-center justify-between gap-4'>
-							<dt className='text-base font-normal text-gray-300'>Savings</dt>
-							<dd className='text-base font-medium text-emerald-400'>-${formattedSavings}</dd>
-						</dl>
-					)}
+      const options = {
+        key: keyId,
+        amount: amount,
+        currency: currency,
+        name: "Giftify Delhi",
+        description: "Payment for your order",
+        order_id: order_id,
+        // 3. THIS IS THE FIX: PREFILL DATA
+        prefill: {
+          name: address.fullName,
+          email: user?.email,
+          contact: address.phone,
+        },
+        handler: async function (response) {
+          try {
+            await axios.post("/payments/checkout-success", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            window.location.href = "/purchase-success";
+          } catch (error) {
+            console.error("Error confirming payment:", error);
+            window.location.href = "/purchase-cancel";
+          }
+        },
+        theme: {
+          color: "#d4af37",
+        },
+      };
 
-					{coupon && isCouponApplied && (
-						<dl className='flex items-center justify-between gap-4'>
-							<dt className='text-base font-normal text-gray-300'>Coupon ({coupon.code})</dt>
-							<dd className='text-base font-medium text-emerald-400'>-{coupon.discountPercentage}%</dd>
-						</dl>
-					)}
-					<dl className='flex items-center justify-between gap-4 border-t border-gray-600 pt-2'>
-						<dt className='text-base font-bold text-white'>Total</dt>
-						<dd className='text-base font-bold text-emerald-400'>${formattedTotal}</dd>
-					</dl>
-				</div>
+      const rzp1 = new window.Razorpay(options);
+      rzp1.open();
+    } catch (error) {
+      console.error(error);
+      toast.error("Payment initiation failed");
+    }
+  };
 
-				<motion.button
-					className='flex w-full items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-300'
-					whileHover={{ scale: 1.05 }}
-					whileTap={{ scale: 0.95 }}
-					onClick={handlePayment}
-				>
-					Proceed to Checkout
-				</motion.button>
+  return (
+    <motion.div
+      className="space-y-4 rounded-lg border border-gray-700 bg-gray-800 p-4 shadow-sm sm:p-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <p className="text-xl font-semibold text-emerald-400">Order Summary</p>
 
-				<div className='flex items-center justify-center gap-2'>
-					<span className='text-sm font-normal text-gray-400'>or</span>
-					<Link
-						to='/'
-						className='inline-flex items-center gap-2 text-sm font-medium text-emerald-400 underline hover:text-emerald-300 hover:no-underline'
-					>
-						Continue Shopping
-						<MoveRight size={16} />
-					</Link>
-				</div>
-			</div>
-		</motion.div>
-	);
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <dl className="flex items-center justify-between gap-4">
+            <dt className="text-base font-normal text-gray-300">
+              Original price
+            </dt>
+            <dd className="text-base font-medium text-white">
+              ₹{formattedSubtotal}
+            </dd>
+          </dl>
+
+          {savings > 0 && (
+            <dl className="flex items-center justify-between gap-4">
+              <dt className="text-base font-normal text-gray-300">Savings</dt>
+              <dd className="text-base font-medium text-emerald-400">
+                -₹{formattedSavings}
+              </dd>
+            </dl>
+          )}
+
+          {coupon && isCouponApplied && (
+            <dl className="flex items-center justify-between gap-4">
+              <dt className="text-base font-normal text-gray-300">
+                Coupon ({coupon.code})
+              </dt>
+              <dd className="text-base font-medium text-emerald-400">
+                -{coupon.discountPercentage}%
+              </dd>
+            </dl>
+          )}
+          <dl className="flex items-center justify-between gap-4 border-t border-gray-600 pt-2">
+            <dt className="text-base font-bold text-white">Total</dt>
+            <dd className="text-base font-bold text-emerald-400">
+              ₹{formattedTotal}
+            </dd>
+          </dl>
+        </div>
+
+        {/* Address Form */}
+        <div className="border-t border-gray-600 pt-4 mt-4">
+          <h3 className="text-lg font-medium text-white mb-4">
+            Shipping Details
+          </h3>
+          <div className="grid grid-cols-1 gap-4">
+            <input
+              type="text"
+              name="fullName"
+              placeholder="Full Name"
+              value={address.fullName}
+              onChange={handleInputChange}
+              className="w-full bg-gray-700 text-white rounded p-2 border border-gray-600 focus:outline-none focus:border-emerald-500"
+              required
+            />
+            <input
+              type="text"
+              name="address"
+              placeholder="Street Address"
+              value={address.address}
+              onChange={handleInputChange}
+              className="w-full bg-gray-700 text-white rounded p-2 border border-gray-600 focus:outline-none focus:border-emerald-500"
+              required
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <input
+                type="text"
+                name="city"
+                placeholder="City"
+                value={address.city}
+                onChange={handleInputChange}
+                className="w-full bg-gray-700 text-white rounded p-2 border border-gray-600 focus:outline-none focus:border-emerald-500"
+                required
+              />
+              <input
+                type="text"
+                name="postalCode"
+                placeholder="Postal Code"
+                value={address.postalCode}
+                onChange={handleInputChange}
+                className="w-full bg-gray-700 text-white rounded p-2 border border-gray-600 focus:outline-none focus:border-emerald-500"
+                required
+              />
+            </div>
+            {/* Phone Number Input */}
+            <input
+              type="tel"
+              name="phone"
+              placeholder="Phone Number (e.g. 9999999999)"
+              value={address.phone}
+              onChange={handleInputChange}
+              className="w-full bg-gray-700 text-white rounded p-2 border border-gray-600 focus:outline-none focus:border-emerald-500"
+              required
+            />
+          </div>
+        </div>
+
+        <motion.button
+          className="flex w-full items-center justify-center rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-300 mt-6"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={handlePayment}
+        >
+          Proceed to Checkout
+        </motion.button>
+
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-sm font-normal text-gray-400">or</span>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-sm font-medium text-emerald-400 underline hover:no-underline"
+          >
+            Continue Shopping
+            <MoveRight size={16} />
+          </Link>
+        </div>
+      </div>
+    </motion.div>
+  );
 };
 export default OrderSummary;

@@ -1,91 +1,169 @@
-import { ShoppingCart, UserPlus, LogIn, LogOut, Lock } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { ShoppingCart, LogOut, Lock, Menu, X, ShoppingBag } from "lucide-react";
 import { useUserStore } from "../stores/useUserStore";
 import { useCartStore } from "../stores/useCartStore";
 
 const Navbar = () => {
-	const { user, logout } = useUserStore();
-	const isAdmin = user?.role === "admin";
-	const { cart } = useCartStore();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-	return (
-		<header className='fixed top-0 left-0 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md shadow-lg z-40 transition-all duration-300 border-b border-emerald-800'>
-			<div className='container mx-auto px-4 py-3'>
-				<div className='flex flex-wrap justify-between items-center'>
-					<Link to='/' className='text-2xl font-bold text-emerald-400 items-center space-x-2 flex'>
-						E-Commerce
-					</Link>
+  const { user, logout } = useUserStore();
+  const { cart } = useCartStore();
+  const isAdmin = user?.role === "admin";
 
-					<nav className='flex flex-wrap items-center gap-4'>
-						<Link
-							to={"/"}
-							className='text-gray-300 hover:text-emerald-400 transition duration-300
-					 ease-in-out'
-						>
-							Home
-						</Link>
-						{user && (
-							<Link
-								to={"/cart"}
-								className='relative group text-gray-300 hover:text-emerald-400 transition duration-300 
-							ease-in-out'
-							>
-								<ShoppingCart className='inline-block mr-1 group-hover:text-emerald-400' size={20} />
-								<span className='hidden sm:inline'>Cart</span>
-								{cart.length > 0 && (
-									<span
-										className='absolute -top-2 -left-2 bg-emerald-500 text-white rounded-full px-2 py-0.5 
-									text-xs group-hover:bg-emerald-400 transition duration-300 ease-in-out'
-									>
-										{cart.length}
-									</span>
-								)}
-							</Link>
-						)}
-						{isAdmin && (
-							<Link
-								className='bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded-md font-medium
-								 transition duration-300 ease-in-out flex items-center'
-								to={"/secret-dashboard"}
-							>
-								<Lock className='inline-block mr-1' size={18} />
-								<span className='hidden sm:inline'>Dashboard</span>
-							</Link>
-						)}
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
-						{user ? (
-							<button
-								className='bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 
-						rounded-md flex items-center transition duration-300 ease-in-out'
-								onClick={logout}
-							>
-								<LogOut size={18} />
-								<span className='hidden sm:inline ml-2'>Log Out</span>
-							</button>
-						) : (
-							<>
-								<Link
-									to={"/signup"}
-									className='bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 
-									rounded-md flex items-center transition duration-300 ease-in-out'
-								>
-									<UserPlus className='mr-2' size={18} />
-									Sign Up
-								</Link>
-								<Link
-									to={"/login"}
-									className='bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 
-									rounded-md flex items-center transition duration-300 ease-in-out'
-								>
-									<LogIn className='mr-2' size={18} />
-									Login
-								</Link>
-							</>
-						)}
-					</nav>
-				</div>
-			</div>
-		</header>
-	);
+  return (
+    <header
+      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
+        isScrolled
+          ? "bg-[#050505]/90 backdrop-blur-md py-4 border-b border-white/5"
+          : "bg-transparent py-6"
+      }`}
+    >
+      <div className="container mx-auto px-4 flex justify-between items-center">
+        {/* Logo */}
+        <Link
+          to="/"
+          className="text-2xl font-display tracking-widest text-white hover:opacity-90 transition"
+        >
+          GIFTIFY<span className="text-[#d4af37]">DELHI</span>
+        </Link>
+
+        {/* Desktop Nav */}
+        <nav className="hidden md:flex items-center gap-8">
+          <Link
+            to="/"
+            className="text-sm uppercase tracking-widest text-gray-300 hover:text-[#d4af37] transition"
+          >
+            Home
+          </Link>
+          {/* NEW LINKS ADDED HERE */}
+          <Link
+            to="/shop"
+            className="text-sm uppercase tracking-widest text-gray-300 hover:text-[#d4af37] transition"
+          >
+            Explore
+          </Link>
+          <Link
+            to="/about"
+            className="text-sm uppercase tracking-widest text-gray-300 hover:text-[#d4af37] transition"
+          >
+            About
+          </Link>
+
+          {isAdmin && (
+            <Link
+              to="/secret-dashboard"
+              className="flex items-center gap-1 text-[#d4af37] hover:text-white transition"
+            >
+              <Lock size={16} />
+              <span className="text-xs uppercase font-bold">Admin</span>
+            </Link>
+          )}
+        </nav>
+
+        {/* Icons / Auth */}
+        <div className="flex items-center gap-6">
+          {user ? (
+            <>
+              <Link
+                to="/purchase-history"
+                className="text-gray-300 hover:text-[#d4af37] transition flex flex-col items-center group"
+                title="My Orders"
+              >
+                <ShoppingBag size={20} />
+              </Link>
+
+              <Link
+                to="/cart"
+                className="relative group text-gray-300 hover:text-[#d4af37] transition"
+              >
+                <ShoppingCart size={20} />
+                {cart.length > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-[#d4af37] text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {cart.length}
+                  </span>
+                )}
+              </Link>
+              <button
+                onClick={logout}
+                className="text-gray-300 hover:text-red-400 transition"
+                title="Logout"
+              >
+                <LogOut size={20} />
+              </button>
+            </>
+          ) : (
+            <div className="flex gap-4">
+              <Link
+                to="/login"
+                className="text-sm uppercase tracking-wider font-semibold text-white hover:text-[#d4af37] transition"
+              >
+                Login
+              </Link>
+              <Link
+                to="/signup"
+                className="hidden sm:block px-5 py-2 bg-[#d4af37] text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition hover:scale-105 transform"
+              >
+                Sign Up
+              </Link>
+            </div>
+          )}
+
+          {/* Mobile Menu Button */}
+          <button
+            className="md:hidden text-white"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X /> : <Menu />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden absolute top-full left-0 w-full bg-[#050505] border-t border-white/10 p-6 flex flex-col gap-4 shadow-xl">
+          <Link
+            to="/shop"
+            className="text-gray-300 hover:text-[#d4af37]"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Explore Collection
+          </Link>
+          <Link
+            to="/about"
+            className="text-gray-300 hover:text-[#d4af37]"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            About Us
+          </Link>
+          <Link
+            to="/purchase-history"
+            className="text-gray-300 hover:text-[#d4af37]"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            My Orders
+          </Link>
+          {isAdmin && (
+            <Link
+              to="/secret-dashboard"
+              className="text-[#d4af37] font-bold"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Admin Dashboard
+            </Link>
+          )}
+        </div>
+      )}
+    </header>
+  );
 };
 export default Navbar;
